@@ -1,0 +1,20 @@
+[project]
+name = "imager-selection"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Chris McKenna", email = "cmckenna@creare.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.10.9",
+    "numpy>=2.4.4",
+]
+
+[project.scripts]
+imager-selection = "imager_selection:main"
+
+[build-system]
+requires = ["uv_build>=0.11.3,<0.12.0"]
+build-backend = "uv_build"
