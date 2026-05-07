@@ -130,7 +130,7 @@ class Imager:
                 the lens focal length.
             f_num: F-number (aperture setting). Must be within the lens f-number
                 range [f_num_min, f_num_max].
-            c: Circle of confusion diameter in mm. Defaults to camera pixel pitch
+            c: Circle of confusion diameter in mm on the image plane. Defaults to camera pixel pitch
                 if not provided.
 
         Returns:
