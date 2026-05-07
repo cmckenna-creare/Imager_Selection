@@ -81,3 +81,40 @@ class Imager:
 
         self.camera = camera
         self.lens = lens
+
+    def calc_FOV(self, distance: float) -> list[float]:
+        """Calculate the field of view at a given object-plane distance.
+
+        Uses the thin-lens equation. If the camera sensor format exceeds the
+        lens's maximum sensor format, the effective sensor is scaled down to
+        fit within the lens image circle before computing FOV.
+
+        Args:
+            distance: Distance from the lens to the object plane in mm.
+                Must be greater than the lens focal length.
+
+        Returns:
+            [fov_width, fov_height] in mm at the object plane.
+
+        Raises:
+            ValueError: If distance <= focal_length (no real image formed).
+        """
+        if distance <= self.lens.focal_length:
+            raise ValueError(
+                f"distance ({distance} mm) must be greater than focal_length "
+                f"({self.lens.focal_length} mm) to form a real image"
+            )
+
+        [w, h] = self.camera.get_sensor_wh()
+
+        # Scale effective sensor area down if sensor exceeds lens image circle.
+        if self.camera.sensor_format > self.lens.sensor_format_max:
+            scale = self.lens.sensor_format_max / self.camera.sensor_format
+            w *= scale
+            h *= scale
+
+        # Thin-lens FOV: FOV = sensor_size * (do - f) / f
+        fov_width = w * (distance - self.lens.focal_length) / self.lens.focal_length
+        fov_height = h * (distance - self.lens.focal_length) / self.lens.focal_length
+
+        return [fov_width, fov_height]
