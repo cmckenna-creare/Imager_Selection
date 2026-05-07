@@ -118,3 +118,60 @@ class Imager:
         fov_height = h * (distance - self.lens.focal_length) / self.lens.focal_length
 
         return [fov_width, fov_height]
+
+    def get_DOF(self, distance: float, f_num: float, c: Optional[float] = None) -> list[float]:
+        """Compute the near and far distances that will be in focus.
+
+        Uses the exact thin-lens blur-circle derivation. The circle of confusion
+        defines the largest acceptable blur spot on the sensor.
+
+        Args:
+            distance: Nominal distance to subject in mm. Must be greater than
+                the lens focal length.
+            f_num: F-number (aperture setting). Must be within the lens f-number
+                range [f_num_min, f_num_max].
+            c: Circle of confusion diameter in mm. Defaults to camera pixel pitch
+                if not provided.
+
+        Returns:
+            [near, far] in-focus distances in mm. Far is float('inf') when the
+            subject is at or beyond the hyperfocal distance.
+
+        Raises:
+            ValueError: If distance <= focal_length.
+            ValueError: If f_num is outside the lens f-number range.
+            ValueError: If c is provided but not positive.
+        """
+        f = self.lens.focal_length
+
+        if distance <= f:
+            raise ValueError(
+                f"distance ({distance} mm) must be greater than focal_length ({f} mm)"
+            )
+        if not (self.lens.f_num[0] <= f_num <= self.lens.f_num[1]):
+            raise ValueError(
+                f"f_num ({f_num}) is outside the lens range {self.lens.f_num}"
+            )
+        if c is not None and c <= 0:
+            raise ValueError(f"c (circle of confusion) must be positive, got {c!r}")
+
+        if c is None:
+            c = self.camera.pp
+
+        s = distance
+
+        # Exact thin-lens DOF formulas derived from blur-circle geometry:
+        #   b = (f/N) * |v - v'| / v'   where v = f*s/(s-f), v' = f*D/(D-f)
+        # Solving b = c for D near and far gives:
+        #   D_near = f²·s / (f² + N·c·(s−f))
+        #   D_far  = f²·s / (f² − N·c·(s−f))  [∞ when s ≥ hyperfocal]
+        common = f_num * c * (s - f)
+        d_near = (f**2 * s) / (f**2 + common)
+
+        if common >= f**2:
+            # Subject is at or beyond the hyperfocal distance.
+            d_far = float('inf')
+        else:
+            d_far = (f**2 * s) / (f**2 - common)
+
+        return [d_near, d_far]
