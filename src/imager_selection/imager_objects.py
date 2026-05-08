@@ -257,6 +257,89 @@ class Imager:
         print(f'  Resolution: {res:.4g} px/mm')
         print(f'  DOF:        {fmt_length(d_near)} to {fmt_length(d_far)}')
 
+    def plot_imager(self, distance: float, f_num: float, save_path: str, c: Optional[float] = None) -> None:
+        """Plot DOF, resolution, and FOV vs working distance and save to file.
+
+        Sweeps working distance across the lens's allowed range and plots the
+        three metrics in stacked subplots. Each axis auto-switches between mm
+        and m depending on the magnitude of the data. The supplied `distance`
+        is marked on each subplot as a vertical reference line.
+
+        Args:
+            distance: Reference working distance in mm (marked on each subplot).
+            f_num: F-number used for the DOF curves. Must be within the lens range.
+            save_path: Path to write the figure to (extension determines format).
+            c: Circle of confusion in mm. Defaults to camera pixel pitch.
+        """
+        import matplotlib.pyplot as plt
+
+        f = self.lens.focal_length
+        wd_min, wd_max = self.lens.working_distance
+        # Sweep ±a few-x around the prescribed distance, clamped to the lens range
+        # and to wd > f (real-image requirement).
+        lo = max(wd_min, f * 1.001, 0.3 * distance)
+        hi = min(wd_max, 3.0 * distance)
+        distances = np.linspace(lo, hi, 500)
+
+        fovs = np.array([self.calc_FOV(d) for d in distances])
+        fov_w = fovs[:, 0]
+        fov_h = fovs[:, 1]
+        res = np.array([self.calc_resolution(d) for d in distances])
+        dofs = np.array([self.get_DOF(d, f_num, c) for d in distances])
+        d_near = dofs[:, 0]
+        d_far = dofs[:, 1]
+
+        def pick_unit(values: np.ndarray) -> tuple[float, str]:
+            """Return (divisor, label) — m if median magnitude >= 1000 mm, else mm."""
+            finite = values[np.isfinite(values)]
+            if finite.size == 0 or np.median(np.abs(finite)) < 1000:
+                return 1.0, 'mm'
+            return 1000.0, 'm'
+
+        x_div, x_unit = pick_unit(distances)
+        fov_div, fov_unit = pick_unit(np.concatenate([fov_w, fov_h]))
+        dof_div, dof_unit = pick_unit(np.concatenate([d_near, d_far]))
+
+        fig, (ax_fov, ax_res, ax_dof) = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
+
+        x = distances / x_div
+        ax_fov.plot(x, fov_w / fov_div, label='Width')
+        ax_fov.plot(x, fov_h / fov_div, label='Height')
+        ax_fov.set_ylabel(f'FOV ({fov_unit})')
+        ax_fov.legend()
+        ax_fov.grid(True, which='both', alpha=0.3)
+
+        ax_res.plot(x, res)
+        ax_res.set_ylabel('Resolution (px/mm)')
+        ax_res.grid(True, which='both', alpha=0.3)
+
+        # Mask infinities (subject beyond hyperfocal) so they don't blow up the y-axis.
+        d_far_plot = np.where(np.isfinite(d_far), d_far / dof_div, np.nan)
+        ax_dof.plot(x, d_near / dof_div, label='Near')
+        ax_dof.plot(x, d_far_plot, label='Far')
+        ax_dof.set_ylabel(f'DOF bounds ({dof_unit})')
+        ax_dof.set_xlabel(f'Working distance ({x_unit})')
+        # Cap DOF y-axis at 5x the prescribed working distance — Far diverges
+        # near hyperfocal and would otherwise dominate the plot.
+        ax_dof.set_ylim(0, 5 * distance / dof_div)
+        ax_dof.legend()
+        ax_dof.grid(True, which='both', alpha=0.3)
+
+        for ax in (ax_fov, ax_res, ax_dof):
+            ax.axvline(
+                distance / x_div, color='red', linestyle='--', linewidth=1.5,
+                alpha=0.8, label=f'Prescribed WD ({distance / x_div:.4g} {x_unit})',
+            )
+        # Re-draw legends so the prescribed-WD line shows up on every subplot.
+        ax_fov.legend()
+        ax_res.legend()
+        ax_dof.legend()
+
+        fig.suptitle(f'Imager metrics vs working distance (f/{f_num:.4g})')
+        fig.tight_layout()
+        fig.savefig(save_path)
+        plt.close(fig)
+
 
 # Ignore
 from imager_selection.imager_objects import Camera, Lens, Imager
