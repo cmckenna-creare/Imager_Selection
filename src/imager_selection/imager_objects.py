@@ -3,15 +3,18 @@ import numpy as np
 
 # All lengths are in mm.
 
+_VALID_MOUNTS = {'C', 'CS'}
+
 
 class Camera:
-    def __init__(self, res_x: int, res_y: int, pp: float, fps_max: Optional[float] = None):
+    def __init__(self, res_x: int, res_y: int, pp: float, mount: str, fps_max: Optional[float] = None):
         """Initialize a camera sensor.
 
         Args:
             res_x: Horizontal resolution in pixels. Must be positive.
             res_y: Vertical resolution in pixels. Must be positive.
             pp: Pixel pitch in mm. Must be positive.
+            mount: Lens mount type. Must be 'C' or 'CS'.
             fps_max: Maximum frame rate in frames per second. Must be positive if provided.
         """
         if res_x <= 0 or not isinstance(res_x, int):
@@ -20,12 +23,15 @@ class Camera:
             raise ValueError(f"res_y must be a positive integer, got {res_y!r}")
         if pp <= 0:
             raise ValueError(f"pp (pixel pitch) must be positive, got {pp!r}")
+        if mount not in _VALID_MOUNTS:
+            raise ValueError(f"mount must be 'C' or 'CS', got {mount!r}")
         if fps_max is not None and fps_max <= 0:
             raise ValueError(f"fps_max must be positive, got {fps_max!r}")
 
         self.res_x = res_x
         self.res_y = res_y
         self.pp = pp
+        self.mount = mount
         self.fps_max = fps_max
 
         self.calc_sensor_format()
@@ -42,7 +48,7 @@ class Camera:
 
 
 class Lens:
-    def __init__(self, focal_length: float, sensor_format_max: float, f_num: tuple, working_distance: tuple):
+    def __init__(self, focal_length: float, sensor_format_max: float, f_num: tuple, working_distance: tuple, mount: str):
         """Initialize a lens.
 
         Args:
@@ -50,6 +56,7 @@ class Lens:
             sensor_format_max: Maximum supported sensor format (diagonal / 16) in mm. Must be positive.
             f_num: (min, max) f-number range. Both values must be positive and min <= max.
             working_distance: (min, max) working distance range in mm. Both values must be positive and min <= max.
+            mount: Lens mount type. Must be 'C' or 'CS'.
         """
         if focal_length <= 0:
             raise ValueError(f"focal_length must be positive, got {focal_length!r}")
@@ -59,11 +66,14 @@ class Lens:
             raise ValueError(f"f_num must be a (min, max) tuple with positive values and min <= max, got {f_num!r}")
         if len(working_distance) != 2 or working_distance[0] <= 0 or working_distance[1] <= 0 or working_distance[0] > working_distance[1]:
             raise ValueError(f"working_distance must be a (min, max) tuple with positive values and min <= max, got {working_distance!r}")
+        if mount not in _VALID_MOUNTS:
+            raise ValueError(f"mount must be 'C' or 'CS', got {mount!r}")
 
         self.focal_length = focal_length
         self.sensor_format_max = sensor_format_max
         self.f_num = f_num
         self.working_distance = working_distance
+        self.mount = mount
 
 
 class Imager:
@@ -78,6 +88,10 @@ class Imager:
             raise TypeError(f"camera must be a Camera instance, got {type(camera).__name__!r}")
         if not isinstance(lens, Lens):
             raise TypeError(f"lens must be a Lens instance, got {type(lens).__name__!r}")
+        if camera.mount != lens.mount:
+            raise NotImplementedError(
+                f"Mismatched mounts (camera: {camera.mount!r}, lens: {lens.mount!r}) are not supported"
+            )
 
         self.camera = camera
         self.lens = lens
@@ -118,6 +132,33 @@ class Imager:
         fov_height = h * (distance - self.lens.focal_length) / self.lens.focal_length
 
         return [fov_width, fov_height]
+
+    def calc_resolution(self, distance: float) -> float:
+        """Calculate the object-plane resolution at a given distance.
+
+        Uses thin-lens magnification m = f / (d - f). One pixel of pitch `pp`
+        on the sensor maps to `pp / m` at the object plane, so the resolution
+        is `m / pp = f / (pp * (d - f))`. Independent of sensor / image-circle
+        match because pixel pitch sets the sampling rate.
+
+        Args:
+            distance: Distance from the lens to the object plane in mm.
+                Must be greater than the lens focal length.
+
+        Returns:
+            Resolution at the object plane in px/mm.
+
+        Raises:
+            ValueError: If distance <= focal_length (no real image formed).
+        """
+        f = self.lens.focal_length
+        if distance <= f:
+            raise ValueError(
+                f"distance ({distance} mm) must be greater than focal_length "
+                f"({f} mm) to form a real image"
+            )
+
+        return f / (self.camera.pp * (distance - f))
 
     def get_DOF(self, distance: float, f_num: float, c: Optional[float] = None) -> list[float]:
         """Compute the near and far distances that will be in focus.
