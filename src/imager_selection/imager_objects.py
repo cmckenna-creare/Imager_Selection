@@ -216,3 +216,56 @@ class Imager:
             d_far = (f**2 * s) / (f**2 - common)
 
         return [d_near, d_far]
+
+    def print_imager(self, distance: float, f_num: float, c: Optional[float] = None) -> None:
+        """Print camera + lens parameters and FOV, resolution, and DOF results.
+
+        Values are formatted to 4 significant figures. Lengths are shown in
+        mm when the magnitude is < 1000 mm and in m otherwise. Arguments
+        match get_DOF; FOV and resolution use only `distance`.
+        """
+        [fov_w, fov_h] = self.calc_FOV(distance)
+        res = self.calc_resolution(distance)
+        [d_near, d_far] = self.get_DOF(distance, f_num, c)
+        [sensor_w, sensor_h] = self.camera.get_sensor_wh()
+        wd_min, wd_max = self.lens.working_distance
+
+        def fmt_length(x: float) -> str:
+            if x == float('inf'):
+                return 'inf'
+            if abs(x) >= 1000:
+                return f'{x / 1000:.4g} m'
+            return f'{x:.4g} mm'
+
+        fps = f'{self.camera.fps_max:.4g} fps' if self.camera.fps_max is not None else 'n/a'
+
+        print('Camera:')
+        print(f'  Resolution:     {self.camera.res_x} x {self.camera.res_y} px')
+        print(f'  Pixel pitch:    {fmt_length(self.camera.pp)}')
+        print(f'  Sensor size:    {fmt_length(sensor_w)} x {fmt_length(sensor_h)}')
+        print(f'  Sensor format:  {self.camera.sensor_format:.4g}')
+        print(f'  Mount:          {self.camera.mount}')
+        print(f'  Max frame rate: {fps}')
+        print('Lens:')
+        print(f'  Focal length:   {fmt_length(self.lens.focal_length)}')
+        print(f'  Max sensor fmt: {self.lens.sensor_format_max:.4g}')
+        print(f'  F-number range: {self.lens.f_num[0]:.4g} to {self.lens.f_num[1]:.4g}')
+        print(f'  Working dist:   {fmt_length(wd_min)} to {fmt_length(wd_max)}')
+        print(f'  Mount:          {self.lens.mount}')
+        print('Results:')
+        print(f'  FOV:        {fmt_length(fov_w)} x {fmt_length(fov_h)}')
+        print(f'  Resolution: {res:.4g} px/mm')
+        print(f'  DOF:        {fmt_length(d_near)} to {fmt_length(d_far)}')
+
+
+# Ignore
+from imager_selection.imager_objects import Camera, Lens, Imager
+dist = 2591
+f_num = 2.8
+cam = Camera(res_x= 5320, res_y= 4600, pp= 0.00274, mount= 'C', fps_max= 15)
+lens = Lens(focal_length= 100, sensor_format_max= 4/3, f_num= (2.8,22), working_distance= (750,1000000), mount= 'C')
+imager = Imager(cam,lens)
+h_fov, v_fov = imager.calc_FOV(dist)
+res = imager.calc_resolution(dist)
+n_dof, f_dof = imager.get_DOF(dist,f_num)
+imager.print_imager(dist,f_num)
