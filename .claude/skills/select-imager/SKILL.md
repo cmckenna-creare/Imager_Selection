@@ -52,8 +52,8 @@ The user will ask for an imager recommendation based on desired performance char
    1. Request: A summary of what the user requested. Include a word summary as well as a table with the number used for performance characteristics. Highlight any assumptions you made. Include any clarification or preference questions and responses that may have been generated during processing.
    2. Anticipated Performance. This section should include
       - A brief overview of the imager, highlighting any notes of interest
-      - The verbatim output of print_imager()
-      - The plots from plot_imager().
+      - The verbatim output of print_imager() for the designed imager. Make sure to use the same circle of confusion used for the analysis.
+      - An embedding of the plots from plot_imager().
    3. Component information. A table that includes information about the camera and lenses. The table should contain, performance characteristics, serial number, name, link, and cost. Unless asked for options, always give a specific recommendation for each component. Check any links provided to make sure they are correct.
    4. For each link in the report, run WebFetch and confirm it resolves to the named part. If it does not perform a web search to find the correct link.
    5. For each link in the report, run WebFetch and confirm it resolves to the named part. If it does not remove the link.
